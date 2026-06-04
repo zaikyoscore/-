@@ -268,8 +268,8 @@ label{font-size:11px;color:var(--mid);display:block;margin-bottom:4px;font-weigh
     <div class="card-title">大会設定</div>
     <div class="form-row tri">
       <div class="form-group"><label>大会名</label><input id="tournament-name" placeholder="第○回 ○○大会" oninput="updateHeaderTitle()"></div>
-      <div class="form-group"><label>スコアアプリURL</label><input id="app-url" placeholder="https://.../badminton_score.html"></div>
-      <div class="form-group"><label>オーダー入力アプリURL</label><input id="order-url" placeholder="https://.../order_input.html"></div>
+      <input type="hidden" id="app-url" value="https://zaikyoscore.github.io/-/badminton_score.html">
+      <input type="hidden" id="order-url" value="https://zaikyoscore.github.io/-/order_input.html">
     </div>
     <div class="form-row">
       <div class="form-group"><label>GAS WebアプリURL</label><input id="gas-url" placeholder="https://script.google.com/macros/s/.../exec" oninput="onGasUrlInput()"></div>
@@ -292,12 +292,7 @@ label{font-size:11px;color:var(--mid);display:block;margin-bottom:4px;font-weigh
     <div class="notice notice-info" style="margin-bottom:10px;">
       📥 Excelファイル（複数可）からチーム・選手を一括読み込みできます。ファイルはチームごとに1シート、C列に氏名、1行目に団体名・参加部門が必要です。
     </div>
-    <div style="margin-bottom:10px;padding:10px 12px;background:#fff8f5;border:1.5px solid #f0c8b0;border-radius:8px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-      <span style="font-size:12px;color:#856404;font-weight:700;">🧪 テスト用</span>
-      <button class="btn btn-outline btn-sm" onclick="insertDummyData()">⚡ ダミーデータを一括投入（チーム・選手・対戦表）</button>
-      <button class="btn btn-danger btn-sm" onclick="clearAllData()">🗑️ 全データをリセット</button>
-      <span id="dummy-status" style="font-size:11px;color:var(--mid);"></span>
-    </div>
+
     <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <label class="btn btn-outline" style="cursor:pointer;">
         📂 Excelファイルを選択（複数可）
@@ -391,7 +386,7 @@ label{font-size:11px;color:var(--mid);display:block;margin-bottom:4px;font-weigh
       📋 <strong>事前印刷用</strong>：1枚にD1/D2/D3の3つのQRを印刷します。選手名は埋め込みません。当日各チームがオーダーQRで入力すると審判のスコアアプリに自動表示されます。
     </div>
     <div class="form-row">
-      <div class="form-group"><label>スコアアプリURL</label><input id="qr-app-url"></div>
+      <input type="hidden" id="qr-app-url" value="https://zaikyoscore.github.io/-/badminton_score.html">
       <input type="hidden" id="qr-gas-url">
     </div>
     <div id="qr-filter-btns" class="filter-btns"></div>
@@ -972,32 +967,24 @@ function goStep3(){
 // ================================================================
 // 円卓法（Berger table）: 4チーム例 ①A-B ②C-D ③A-C ④B-D ⑤A-D ⑥B-C
 function roundRobinOrder(n){
-  if(n < 2) return [];
-  const hasBye = n % 2 === 1;
-  const arr = Array.from({length:n},(_,i)=>i);
-  if(hasBye) arr.push(-1);
-  const m = arr.length, fixed = arr[0], rot = arr.slice(1);
-  const allPairs = [];
-  for(let r = m-2; r >= 0; r--){
-    const shifted = r===0?[...rot]:[...rot.slice(rot.length-r),...rot.slice(0,rot.length-r)];
-    const lineup = [fixed,...shifted], rp = [];
-    for(let i=0;i<m/2;i++){
-      const a=lineup[i],b=lineup[m-1-i];
-      if(a===-1||b===-1)continue;
-      rp.push(a<b?[a,b]:[b,a]);
-    }
-    rp.sort((x,y)=>x[0]-y[0]||x[1]-y[1]);
-    allPairs.push(...rp);
+  if(n<2)return[];
+  const hasBye=n%2===1,arr=Array.from({length:n},(_,i)=>i);
+  if(hasBye)arr.push(-1);
+  const m=arr.length,fixed=arr[0],rot=arr.slice(1),allPairs=[];
+  for(let r=m-2;r>=0;r--){
+    const shifted=r===0?[...rot]:[...rot.slice(rot.length-r),...rot.slice(0,rot.length-r)];
+    const lineup=[fixed,...shifted],rp=[];
+    for(let i=0;i<m/2;i++){const a=lineup[i],b=lineup[m-1-i];if(a===-1||b===-1)continue;rp.push(a<b?[a,b]:[b,a]);}
+    rp.sort((x,y)=>x[0]-y[0]||x[1]-y[1]);allPairs.push(...rp);
   }
   return allPairs;
 }
 function generateMatches(di){
-  const d=S.divisions[di]; d.matches=[];
+  const d=S.divisions[di];d.matches=[];
   d.blocks.forEach((block,bi)=>{
     const bl=blockLabel(bi);
     roundRobinOrder(block.length).forEach(([ai,bi2],idx)=>{
-      const seq=idx+1;
-      const cardId=`${d.name}-${bl}-${String(seq).padStart(2,'0')}`;
+      const seq=idx+1,cardId=`${d.name}-${bl}-${String(seq).padStart(2,'0')}`;
       d.matches.push({cardId,block:bl,division:d.name,round:seq,teamAIdx:block[ai],teamBIdx:block[bi2]});
     });
   });
@@ -1102,40 +1089,33 @@ function renderMatchQRSheets(){
 }
 
 function printSingleSheet(sheetId){
-  const target=document.getElementById(sheetId);
-  if(!target)return;
+  const target=document.getElementById(sheetId);if(!target)return;
   const clone=target.cloneNode(true);
   clone.querySelectorAll('.no-print').forEach(el=>el.remove());
-  const headerHtml=clone.querySelector('.qr-sheet-header')?.innerHTML||'';
-  const dblBoxesHtml=[...clone.querySelectorAll('.qr-dbl-box')].map(b=>b.outerHTML).join('');
+  const hH=clone.querySelector('.qr-sheet-header')?.innerHTML||'';
+  const dH=[...clone.querySelectorAll('.qr-dbl-box')].map(b=>b.outerHTML).join('');
   const win=window.open('','_blank','width=1100,height=750');
-  win.document.write(`<!DOCTYPE html><html><head>
-  <meta charset="utf-8">
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
-  <style>
-    *{box-sizing:border-box;margin:0;padding:0;}
-    @page{size:A4 landscape;margin:10mm;}
-    body{font-family:'Noto Sans JP',sans-serif;background:#fff;width:277mm;height:190mm;display:flex;align-items:center;justify-content:center;}
-    .qr-sheet{width:100%;height:182mm;display:flex;flex-direction:column;justify-content:space-between;padding:6mm 8mm;border:2px solid #000;border-radius:6px;}
-    .qr-sheet-header{text-align:center;border-bottom:2.5px solid #000;padding-bottom:4mm;}
-    .qr-sheet-division{font-size:11pt;color:#555;letter-spacing:1px;margin-bottom:1mm;}
-    .qr-sheet-vs{font-size:28pt;font-weight:900;margin:2mm 0;}
-    .qr-sheet-id{font-size:9pt;color:#888;font-family:monospace;}
-    .qr-sheet-doubles{display:flex;gap:5mm;justify-content:center;align-items:stretch;flex:1;margin:5mm 0;}
-    .qr-dbl-box{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px solid #ddd;border-radius:8px;padding:4mm 3mm;gap:3mm;}
-    .qr-dbl-label{font-size:14pt;font-weight:900;padding:2mm 10mm;border-radius:4px;display:inline-block;}
-    .qr-dbl-label.d1{background:#1a4fa0;color:#fff;}
-    .qr-dbl-label.d2{background:#1a6b3a;color:#fff;}
-    .qr-dbl-label.d3{background:#92400e;color:#fff;}
-    .qr-dbl-box img{width:55mm;height:55mm;display:block;}
-    .qr-dbl-id{font-size:8pt;color:#999;font-family:monospace;text-align:center;word-break:break-all;}
-    .qr-guide{background:#f5f5f5;border:1px solid #ccc;border-radius:5px;padding:3mm 5mm;font-size:10pt;line-height:2;display:flex;gap:6mm;align-items:center;}
-    .qr-guide-title{font-weight:900;font-size:11pt;white-space:nowrap;}
-    .qr-guide-step{white-space:nowrap;}
+  <style>*{box-sizing:border-box;margin:0;padding:0;}@page{size:A4 landscape;margin:10mm;}
+  body{font-family:'Noto Sans JP',sans-serif;background:#fff;width:277mm;height:190mm;display:flex;align-items:center;justify-content:center;}
+  .qr-sheet{width:100%;height:182mm;display:flex;flex-direction:column;justify-content:space-between;padding:6mm 8mm;border:2px solid #000;border-radius:6px;}
+  .qr-sheet-header{text-align:center;border-bottom:2.5px solid #000;padding-bottom:4mm;}
+  .qr-sheet-division{font-size:11pt;color:#555;letter-spacing:1px;margin-bottom:1mm;}
+  .qr-sheet-vs{font-size:28pt;font-weight:900;margin:2mm 0;}
+  .qr-sheet-id{font-size:9pt;color:#888;font-family:monospace;}
+  .qr-sheet-doubles{display:flex;gap:5mm;justify-content:center;align-items:stretch;flex:1;margin:5mm 0;}
+  .qr-dbl-box{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;border:2px solid #ddd;border-radius:8px;padding:4mm 3mm;gap:3mm;}
+  .qr-dbl-label{font-size:14pt;font-weight:900;padding:2mm 10mm;border-radius:4px;display:inline-block;}
+  .qr-dbl-label.d1{background:#1a4fa0;color:#fff;}.qr-dbl-label.d2{background:#1a6b3a;color:#fff;}.qr-dbl-label.d3{background:#92400e;color:#fff;}
+  .qr-dbl-box img{width:55mm;height:55mm;display:block;}
+  .qr-dbl-id{font-size:8pt;color:#999;font-family:monospace;text-align:center;word-break:break-all;}
+  .qr-guide{background:#f5f5f5;border:1px solid #ccc;border-radius:5px;padding:3mm 5mm;font-size:10pt;line-height:2;display:flex;gap:6mm;align-items:center;}
+  .qr-guide-title{font-weight:900;font-size:11pt;white-space:nowrap;}.qr-guide-step{white-space:nowrap;}
   </style></head><body>
   <div class="qr-sheet">
-    <div class="qr-sheet-header">${headerHtml}</div>
-    <div class="qr-sheet-doubles">${dblBoxesHtml}</div>
+    <div class="qr-sheet-header">${hH}</div>
+    <div class="qr-sheet-doubles">${dH}</div>
     <div class="qr-guide">
       <div class="qr-guide-title">📱 審判の方へ</div>
       <div class="qr-guide-step">① D1・D2・D3それぞれのQRをスマホで読み取る</div>
@@ -1143,8 +1123,7 @@ function printSingleSheet(sheetId){
       <div class="qr-guide-step">③ 試合終了後「本部に送信」をタップ</div>
     </div>
   </div></body></html>`);
-  win.document.close();
-  win.onload=()=>{setTimeout(()=>{win.print();},800);};
+  win.document.close();win.onload=()=>{setTimeout(()=>{win.print();},800);};
 }
 function renderOrderQRs(){
   const orderUrl=document.getElementById('order-url').value.trim();
@@ -1350,8 +1329,7 @@ function renderStarTables(){
             else if(w2===d.teams[m.teamAIdx].name)aWins++;
             else if(w2===d.teams[m.teamBIdx].name)bWins++;
           });
-          const isA=d.teams[m.teamAIdx].name===tRow.name;
-          const isB=d.teams[m.teamBIdx].name===tRow.name;
+          const isA=d.teams[m.teamAIdx].name===tRow.name,isB=d.teams[m.teamBIdx].name===tRow.name;
           if(!isA&&!isB)return;
           if(aWins>=2){if(isA)w++;else if(isB)l++;}
           else if(bWins>=2){if(isB)w++;else if(isA)l++;}
@@ -2047,10 +2025,8 @@ async function onManualCardChange(){
   const d=S.divisions[divIdx];
   const m=d?.matches.find(m=>m.cardId===cardId)||(d?.playoffs||[]).find(p=>p.cardId===cardId);
   if(!m)return;
-  const tA=m.isPlayoff?null:d.teams[m.teamAIdx];
-  const tB=m.isPlayoff?null:d.teams[m.teamBIdx];
-  const nameA=m.isPlayoff?(m.teamAName||''):(tA?.name||'');
-  const nameB=m.isPlayoff?(m.teamBName||''):(tB?.name||'');
+  const tA=m.isPlayoff?null:d.teams[m.teamAIdx],tB=m.isPlayoff?null:d.teams[m.teamBIdx];
+  const nameA=m.isPlayoff?(m.teamAName||''):(tA?.name||''),nameB=m.isPlayoff?(m.teamBName||''):(tB?.name||'');
   infoEl.textContent=`${nameA} vs ${nameB}`;
   renderManualOrder(m,tA||{name:nameA},tB||{name:nameB});
   renderManualScore(m,tA||{name:nameA},tB||{name:nameB});
@@ -2060,43 +2036,35 @@ async function onManualCardChange(){
   if(!gasUrl)return;
   infoEl.innerHTML=`${esc(nameA)} vs ${esc(nameB)} <span style="font-size:11px;color:var(--mid);">（GASからデータ取得中...）</span>`;
   try{
-    const [orderRes,resultRes]=await Promise.all([
-      fetch(gasUrl+'?action=getOrder&cardId='+encodeURIComponent(cardId)),
-      fetch(gasUrl+'?action=getResults'),
-    ]);
-    const orderData=await orderRes.json(),resultData=await resultRes.json();
-    let orderLoaded=false,resultLoaded=false;
-    if(orderData.status==='ok'&&orderData.orders){
-      const oA=orderData.orders['A'],oB=orderData.orders['B'];
+    const [oRes,rRes]=await Promise.all([fetch(gasUrl+'?action=getOrder&cardId='+encodeURIComponent(cardId)),fetch(gasUrl+'?action=getResults')]);
+    const oData=await oRes.json(),rData=await rRes.json();
+    let oL=false,rL=false;
+    if(oData.status==='ok'&&oData.orders){
+      const oA=oData.orders['A'],oB=oData.orders['B'];
       if(oA||oB){
         ['D1','D2','D3'].forEach(dbl=>{
-          const key=dbl.toLowerCase();
-          const setVal=(id,val)=>{const el=document.getElementById(id);if(!el||!val)return;const opt=[...el.options].find(o=>o.value===val);if(opt){el.value=val;}else{const o=document.createElement('option');o.value=val;o.textContent=val;el.appendChild(o);el.value=val;}};
-          if(oA){setVal(`mo-${cardId}-${dbl}-ap1`,oA[key+'p1']);setVal(`mo-${cardId}-${dbl}-ap2`,oA[key+'p2']);}
-          if(oB){setVal(`mo-${cardId}-${dbl}-bp1`,oB[key+'p1']);setVal(`mo-${cardId}-${dbl}-bp2`,oB[key+'p2']);}
-        });
-        orderLoaded=true;
+          const key=dbl.toLowerCase(),sv=(id,val)=>{const el=document.getElementById(id);if(!el||!val)return;const op=[...el.options].find(o=>o.value===val);if(op){el.value=val;}else{const o=document.createElement('option');o.value=val;o.textContent=val;el.appendChild(o);el.value=val;}};
+          if(oA){sv(`mo-${cardId}-${dbl}-ap1`,oA[key+'p1']);sv(`mo-${cardId}-${dbl}-ap2`,oA[key+'p2']);}
+          if(oB){sv(`mo-${cardId}-${dbl}-bp1`,oB[key+'p1']);sv(`mo-${cardId}-${dbl}-bp2`,oB[key+'p2']);}
+        });oL=true;
       }
     }
-    if(resultData.status==='ok'&&resultData.results){
-      const cardResults=resultData.results.filter(r=>r.cardId===cardId);
-      cardResults.forEach(r=>{
-        const setScore=(id,val)=>{const el=document.getElementById(id);if(el&&val!=='-'&&val!==''&&val!=null)el.value=val;};
-        setScore(`ms-${cardId}-${r.dbl}-g1a`,r.g1a);setScore(`ms-${cardId}-${r.dbl}-g1b`,r.g1b);
-        setScore(`ms-${cardId}-${r.dbl}-g2a`,r.g2a);setScore(`ms-${cardId}-${r.dbl}-g2b`,r.g2b);
-        setScore(`ms-${cardId}-${r.dbl}-g3a`,r.g3a);setScore(`ms-${cardId}-${r.dbl}-g3b`,r.g3b);
+    if(rData.status==='ok'&&rData.results){
+      const cr=rData.results.filter(r=>r.cardId===cardId);
+      cr.forEach(r=>{
+        const ss=(id,val)=>{const el=document.getElementById(id);if(el&&val!=='-'&&val!==''&&val!=null)el.value=val;};
+        ss(`ms-${cardId}-${r.dbl}-g1a`,r.g1a);ss(`ms-${cardId}-${r.dbl}-g1b`,r.g1b);
+        ss(`ms-${cardId}-${r.dbl}-g2a`,r.g2a);ss(`ms-${cardId}-${r.dbl}-g2b`,r.g2b);
+        ss(`ms-${cardId}-${r.dbl}-g3a`,r.g3a);ss(`ms-${cardId}-${r.dbl}-g3b`,r.g3b);
         const st=document.getElementById(`ms-status-${cardId}-${r.dbl}`);
         if(st){st.textContent='✅ 送信済み';st.style.color='var(--green)';}
-      });
-      if(cardResults.length>0)resultLoaded=true;
+      });if(cr.length>0)rL=true;
     }
     const parts=[];
-    if(orderLoaded)parts.push('オーダー取得済み');
-    if(resultLoaded)parts.push(`結果${resultData.results.filter(r=>r.cardId===cardId).length}件取得済み`);
+    if(oL)parts.push('オーダー取得済み');
+    if(rL)parts.push(`結果${rData.results.filter(r=>r.cardId===cardId).length}件取得済み`);
     infoEl.innerHTML=`${esc(nameA)} vs ${esc(nameB)}`+(parts.length?` <span style="font-size:11px;color:var(--green);font-weight:700;">✅ ${parts.join(' / ')}</span>`:` <span style="font-size:11px;color:var(--mid);">（GASにデータなし・新規入力）</span>`);
-  }catch(err){
-    infoEl.innerHTML=`${esc(nameA)} vs ${esc(nameB)} <span style="font-size:11px;color:#c00;">⚠️ GAS取得失敗</span>`;
-  }
+  }catch(e){infoEl.innerHTML=`${esc(nameA)} vs ${esc(nameB)} <span style="font-size:11px;color:#c00;">⚠️ GAS取得失敗</span>`;}
 }
 
 function renderManualOrder(m, tA, tB){
@@ -2294,20 +2262,18 @@ async function submitSingleScore(cardId, dbl){
 // 手入力：スコア送信
 // ================================================================
 async function submitManualScores(){
-  const gasUrl = document.getElementById('standings-gas-url').value.trim();
-  const cardId = document.getElementById('manual-card-select').value;
-  const divIdx = parseInt(document.getElementById('manual-div-select').value);
-  const statusEl = document.getElementById('manual-score-status');
-  const btn = document.querySelector('[onclick="submitManualScores()"]');
-
-  if(!gasUrl){ statusEl.textContent='⚠️ GAS URLが未設定です'; statusEl.style.color='#c00'; return; }
-  if(!cardId){ statusEl.textContent='⚠️ 対戦カードを選択してください'; statusEl.style.color='#c00'; return; }
-
-  const d = S.divisions[divIdx];
-  const m = d?.matches.find(m=>m.cardId===cardId)||(d?.playoffs||[]).find(p=>p.cardId===cardId);
-  if(!m){ statusEl.textContent='⚠️ 対戦カードが見つかりません'; statusEl.style.color='#c00'; return; }
-  const aName = m.isPlayoff?(m.teamAName||''):(d.teams[m.teamAIdx]?.name||'');
-  const bName = m.isPlayoff?(m.teamBName||''):(d.teams[m.teamBIdx]?.name||'');
+  const gasUrl=document.getElementById('standings-gas-url').value.trim();
+  const cardId=document.getElementById('manual-card-select').value;
+  const divIdx=parseInt(document.getElementById('manual-div-select').value);
+  const statusEl=document.getElementById('manual-score-status');
+  const btn=document.querySelector('[onclick="submitManualScores()"]');
+  if(!gasUrl){statusEl.textContent='⚠️ GAS URLが未設定です';statusEl.style.color='#c00';return;}
+  if(!cardId){statusEl.textContent='⚠️ 対戦カードを選択してください';statusEl.style.color='#c00';return;}
+  const d=S.divisions[divIdx];
+  const m=d?.matches.find(m=>m.cardId===cardId)||(d?.playoffs||[]).find(p=>p.cardId===cardId);
+  if(!m){statusEl.textContent='⚠️ 対戦カードが見つかりません';statusEl.style.color='#c00';return;}
+  const aName=m.isPlayoff?(m.teamAName||''):(d.teams[m.teamAIdx]?.name||'');
+  const bName=m.isPlayoff?(m.teamBName||''):(d.teams[m.teamBIdx]?.name||'');
 
   const gv = (id) => { const el=document.getElementById(id); return el?.value!==''?Number(el.value):null; };
 
@@ -2334,12 +2300,10 @@ async function submitManualScores(){
   }
   if(btn){btn.disabled=false;btn.textContent='📤 全ダブルスをまとめて送信';}
   if(errors===0){
-    statusEl.textContent=sent>0?`✅ ${sent}件送信完了${skipped>0?'（'+skipped+'件スキップ）':''}`:'⚠️ 送信できるスコアがありません（スコアを入力してください）';
+    statusEl.textContent=sent>0?`✅ ${sent}件送信完了${skipped>0?'（'+skipped+'件スキップ）':''}`:'⚠️ 送信できるスコアがありません';
     statusEl.style.color=sent>0?'var(--green)':'#c00';
     if(sent>0)setTimeout(fetchStandings,1500);
-  }else{
-    statusEl.textContent=`⚠️ ${errors}件の送信に失敗しました`;statusEl.style.color='#c00';
-  }
+  }else{statusEl.textContent=`⚠️ ${errors}件の送信に失敗しました`;statusEl.style.color='#c00';}
 }
 
 
@@ -2982,7 +2946,7 @@ function getAllMatchesForDiv(d){
 // NAVIGATION
 // ================================================================
 function goStep(n){
-  onGasUrlInput(); // STEP遷移のたびにGAS URLを全欄に同期
+  onGasUrlInput();
   [1,2,3,4,5,6,7,8,9].forEach(i=>{
     const el=document.getElementById('s'+i);
     if(el) el.classList.remove('active');
@@ -3155,128 +3119,6 @@ function printScreen(screenId){
 
 
 // ================================================================
-// テスト用ダミーデータ一括投入
-// ================================================================
-async function insertDummyData(){
-  const statusEl = document.getElementById('dummy-status');
-  statusEl.style.color = 'var(--mid)';
-  statusEl.textContent = '生成中...';
-
-  const divNames = ['1部','2部','3部'];
-  const teamNames = [
-    ['東大A','京大B','阪大C','東北D','名大E','九大F'],
-    ['北大A','神大B','広大C','筑大D','千葉E','横国F'],
-    ['埼大A','金大B','岡大C','熊大D','新大E','長大F'],
-  ];
-  const playerSuffix = ['太郎','花子','次郎','三郎','四郎','五郎','六郎','七郎'];
-
-  S.divisions = divNames.map((divName, di) => {
-    const teams = teamNames[di].map((teamName, ti) => ({
-      name: teamName,
-      players: playerSuffix.slice(0,6).map(s => teamName.slice(0,2) + s),
-    }));
-
-    // 2ブロックに振り分け
-    const blockCount = 2;
-    const blocks = Array.from({length: blockCount}, () => []);
-    teams.forEach((_, ti) => blocks[ti % blockCount].push(ti));
-
-    // 対戦表生成
-    const matches = [];
-    blocks.forEach((block, bi) => {
-      const bl = String.fromCharCode(65 + bi);
-      let seq = 1;
-      for(let a = 0; a < block.length; a++){
-        for(let b = a+1; b < block.length; b++){
-          matches.push({
-            cardId: `${divName}-${bl}-${String(seq).padStart(2,'0')}`,
-            block: bl,
-            division: divName,
-            round: seq,
-            teamAIdx: block[a],
-            teamBIdx: block[b],
-          });
-          seq++;
-        }
-      }
-    });
-
-    return { name: divName, blockCount, teams, blocks, matches };
-  });
-
-  S.activeDivIdx = 0;
-  maxReachedStep = 9;
-
-  // UI更新
-  renderDivTabs('div-tabs','switchDiv',true);
-  renderDivContent();
-  updateHeaderTitle();
-
-  // GASに送信
-  const gasUrl = document.getElementById('gas-url').value.trim();
-  if(gasUrl){
-    statusEl.textContent = 'GASに送信中...';
-    try{
-      const payload = {
-        tournamentName: document.getElementById('tournament-name').value.trim() || 'テスト大会',
-        scoreAppUrl: document.getElementById('app-url').value.trim(),
-        orderAppUrl: document.getElementById('order-url').value.trim(),
-        courtSettings: courtSettings,
-        openSettings: {},
-        divisions: S.divisions.map(d=>({
-          name: d.name,
-          teams: d.teams.map(t=>({name:t.name, players:t.players})),
-          matches: d.matches.map(m=>({
-            cardId: m.cardId,
-            block: m.block,
-            round: m.round,
-            division: m.division,
-            teamAName: d.teams[m.teamAIdx].name,
-            teamBName: d.teams[m.teamBIdx].name,
-          })),
-        })),
-      };
-      // データが大きいのでno-cors POSTで送信
-      await fetch(gasUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({action:'saveTeamData', payload}),
-      });
-      // no-corsはレスポンスが読めないので3秒待って確認
-      await new Promise(r=>setTimeout(r,3000));
-      // 対戦表シートに入ったか確認
-      const check = await fetch(gasUrl + '?action=getTeamData');
-      const checkData = await check.json().catch(()=>({}));
-      if(checkData.status === 'ok'){
-        statusEl.style.color = 'var(--green)';
-        statusEl.textContent = '✅ ダミーデータを投入してGASに送信しました！';
-      } else {
-        statusEl.style.color = '#856404';
-        statusEl.textContent = '⚠️ データは生成しましたがGAS送信確認できず。もう一度試してください。';
-      }
-    } catch(e){
-      statusEl.style.color = '#856404';
-      statusEl.textContent = '⚠️ データは生成しましたがGAS送信失敗: ' + e.message;
-    }
-  } else {
-    statusEl.style.color = 'var(--green)';
-    statusEl.textContent = '✅ ダミーデータを投入しました！（GAS URLを入力すると自動送信されます）';
-  }
-}
-
-function clearAllData(){
-  if(!confirm('全データをリセットしますか？')) return;
-  S.divisions = [];
-  S.activeDivIdx = 0;
-  maxReachedStep = 1;
-  initDefaultDivisions();
-  renderDivTabs('div-tabs','switchDiv',true);
-  renderDivContent();
-  document.getElementById('dummy-status').textContent = '';
-  goStep(1);
-}
-
 // ================================================================
 // Excelファイル読み込み（複数ファイル対応）
 // ================================================================
@@ -3436,14 +3278,9 @@ async function loadExcelFiles(files){
 // GASから大会データを復元
 // ================================================================
 function onGasUrlInput(){
-  // STEP1のGAS URLを全画面の入力欄に自動同期
   const val = document.getElementById('gas-url').value.trim();
-  const ids = ['qr-gas-url','star-gas-url','standings-gas-url',
-                'order-check-gas-url','progress-gas-url'];
-  ids.forEach(id => {
-    const el = document.getElementById(id);
-    if(el) el.value = val;
-  });
+  ['qr-gas-url','star-gas-url','standings-gas-url','order-check-gas-url','progress-gas-url']
+    .forEach(id=>{ const el=document.getElementById(id); if(el) el.value=val; });
 }
 
 async function restoreFromGAS(){
