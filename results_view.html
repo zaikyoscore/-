@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>大会結果</title>
+<style>
+:root{--ink:#1d2433;--sub:#667085;--line:#d5dae3;--bg:#f6f7f9;--card:#fff;--hd:#e7ecf5;--ac:#0b5cad;--win:#e6f4ea;--lose:#fff;}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Hiragino Sans","Noto Sans JP",Meiryo,sans-serif;color:var(--ink);background:var(--bg);line-height:1.5}
+.wrap{max-width:860px;margin:0 auto;padding:14px 10px 60px}
+h1{font-size:20px;margin:6px 0 2px}
+.meta{font-size:12px;color:var(--sub);margin-bottom:12px}
+h2{font-size:16px;margin:22px 0 8px;padding-left:8px;border-left:4px solid var(--ac)}
+h3{font-size:14px;margin:18px 0 6px}
+table{border-collapse:collapse;width:100%;background:var(--card);font-size:13px}
+th,td{border:1px solid var(--line);padding:6px 7px;text-align:center}
+th{background:var(--hd);font-weight:600}
+td.l{text-align:left}td.r{text-align:right}
+a{color:var(--ac)}
+.tbl{overflow-x:auto}
+.back{display:inline-block;margin:4px 0 8px;font-size:14px}
+.mt{margin-bottom:12px;border:1px solid var(--line);background:var(--card);border-radius:4px;overflow:hidden}
+.mt table{border:0}
+.mt .hd td{background:var(--hd);font-weight:600}
+.mt td{border-left:0;border-right:0}
+.mt .w{font-weight:700;background:var(--win)}
+.mt .sc{font-size:12px;white-space:nowrap}
+.mt .id{font-size:11px;color:var(--sub);white-space:nowrap}
+.tag{display:inline-block;background:var(--ac);color:#fff;font-size:10px;padding:0 6px;border-radius:3px;margin-left:4px}
+details{background:var(--card);border:1px solid var(--line);border-radius:4px;padding:8px 10px;margin-bottom:10px}
+summary{cursor:pointer;font-size:13px}
+input[type=text]{width:100%;padding:7px;border:1px solid var(--line);border-radius:4px;font-size:13px;margin:3px 0 8px}
+button{font:inherit;font-size:13px;padding:7px 12px;border:1px solid var(--ac);background:var(--ac);color:#fff;border-radius:4px;cursor:pointer}
+button.o{background:#fff;color:var(--ac)}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #f0a500;outline-offset:2px}
+.msg{font-size:12px;margin-top:6px}
+.empty{padding:24px;text-align:center;color:var(--sub)}
+@media(max-width:520px){th,td{padding:5px 4px;font-size:12px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1 id="ttl">大会結果</h1>
+<div class="meta" id="meta"></div>
+
+<details id="imp">
+<summary>データ取り込み（本部用）</summary>
+<div style="margin-top:8px">
+<label>団体戦のGAS URL<input type="text" id="u-team" placeholder="https://script.google.com/macros/s/.../exec"></label>
+<label>個人戦のGAS URL<input type="text" id="u-indiv" placeholder="https://script.google.com/macros/s/.../exec"></label>
+<button onclick="doImport()">GASから取り込む</button>
+<button class="o" onclick="saveJson()">JSONを保存</button>
+<button class="o" onclick="document.getElementById('f').click()">JSONを読み込む</button>
+<input type="file" id="f" accept=".json" hidden onchange="loadJson(this.files[0])">
+<div class="msg" id="msg"></div>
+<div class="msg" style="color:var(--sub)">保存したJSONを <b>results_data.json</b> という名前でこのページと同じ場所に置くと、閲覧者は何もせずに結果を見られます。</div>
+</div>
+</details>
+
+<div id="main"></div>
+</div>
+
+<script>
+const KEY='badResultsView', KIND={team:'団体戦',indiv:'個人戦'};
+let DB={team:null,indiv:null}, R={team:{},indiv:{}};
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num=v=>(v===''||v==null||v==='-')?null:Number(v);
+
+// ---------- データ ----------
+function index(){
+  R={team:{},indiv:{}};
+  ['team','indiv'].forEach(k=>{
+    if(!DB[k])return;
+    (DB[k].results||[]).forEach(r=>{(R[k][r.cardId]=R[k][r.cardId]||{})[r.dbl||'D1']=r;});
+  });
+}
+function setDB(d){DB={team:d.team||null,indiv:d.indiv||null};index();render();}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify(DB));}catch(e){}}
+async function initData(){
+  let local=null,file=null;
+  try{local=JSON.parse(localStorage.getItem(KEY)||'null');}catch(e){}
+  try{const r=await fetch('results_data.json',{cache:'no-store'});if(r.ok)file=await r.json();}catch(e){}
+  const ts=d=>Math.max(0,...['team','indiv'].map(k=>(d&&d[k]&&d[k].ts)||0));
+  const pick=(file&&ts(file)>=ts(local))?file:(local||file);
+  if(pick)setDB(pick);else render();
+  document.getElementById('imp').open=!pick;
+}
+async function imp(kind,url,say){
+  const g=(a,label)=>{
+    const ctl=new AbortController(),t=setTimeout(()=>ctl.abort(),30000);
+    return fetch(url+'?action='+a,{signal:ctl.signal}).then(r=>r.json()).then(j=>{say(label+' OK');return j;})
+      .catch(e=>{throw new Error(label+'で'+(e.name==='AbortError'?'30秒応答なし':'エラー（'+e.message+'）'));})
+      .finally(()=>clearTimeout(t));
+  };
+  const [t,r,s]=await Promise.all([g('getTeamData','大会情報'),g('getResults','試合結果'),g('getStandings','順位表')]);
+  if(t.status!=='ok')throw new Error('大会情報がありません');
+  DB[kind]={payload:t.payload,results:r.results||[],standings:s.standings||[],ts:Date.now(),at:new Date().toLocaleString('ja-JP')};
+}
+async function doImport(){
+  const m=document.getElementById('msg');m.style.color='';m.textContent='取り込み中...';
+  const jobs=[['team','u-team'],['indiv','u-indiv']].map(([k,id])=>({k,u:document.getElementById(id).value.trim()})).filter(x=>x.u);
+  if(!jobs.length){m.textContent='URLを入力してください';return;}
+  const out=[];
+  for(const j of jobs){
+    const done=[];
+    const say=x=>{done.push(x);m.textContent=out.concat(KIND[j.k]+'：'+done.join(' / ')).join('　||　');};
+    try{await imp(j.k,j.u,say);out.push(KIND[j.k]+'：完了');}
+    catch(e){out.push(KIND[j.k]+'：失敗（'+e.message+'）'+(done.length?'　取得済み：'+done.join('・'):''));}
+  }
+  index();persist();render();m.textContent=out.join('　||　');
+}
+function saveJson(){
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([JSON.stringify(DB)],{type:'application/json'}));
+  a.download='results_data.json';a.click();
+}
+function loadJson(f){
+  if(!f)return;const rd=new FileReader();
+  rd.onload=()=>{try{setDB(JSON.parse(rd.result));persist();document.getElementById('msg').textContent='読み込みました';}catch(e){document.getElementById('msg').textContent='JSONを読み込めませんでした';}};
+  rd.readAsText(f);
+}
+
+// ---------- 集計 ----------
+const A=(k,o)=>k==='team'?o.teamAName:(o.pairAName||o.teamAName);
+const B=(k,o)=>k==='team'?o.teamBName:(o.pairBName||o.teamBName);
+function gw(r){let a=0,b=0,pa=0,pb=0;
+  [[r.g1a,r.g1b],[r.g2a,r.g2b],[r.g3a,r.g3b]].forEach(([x,y])=>{x=num(x);y=num(y);if(x==null||y==null)return;pa+=x;pb+=y;if(x>y)a++;else if(y>x)b++;});
+  return{a,b,pa,pb};}
+function dbls(k){return k==='team'?['D1','D2','D3']:['D1'];}
+// 1対戦カードの結果
+function cardRes(k,cardId,nA,nB){
+  const c=R[k][cardId]||{},ds=dbls(k),got=ds.filter(d=>c[d]);
+  let a=0,b=0;
+  if(k==='team')got.forEach(d=>{const w=c[d].winner;if(w===nA)a++;else if(w===nB)b++;});
+  else if(c.D1){const g=gw(c.D1);a=g.a;b=g.b;}
+  const done=got.length===ds.length;
+  let win='';
+  if(done){if(k==='team'){win=a>=2?nA:b>=2?nB:'';}else{const w=c.D1.winner;win=(w===nA||w===nB)?w:'';}}
+  return{c,a,b,got:got.length,done,win};
+}
+// 順位決定戦グループから最終順位
+function finalRanks(k,d){
+  const ranks={},groups=d.rankGroups||{};
+  Object.entries(groups).forEach(([gid,meta])=>{
+    const ms=(d.playoffs||[]).filter(p=>p.rankGroup===gid).map(p=>({id:p.cardId,a:A(k,p),b:B(k,p)}));
+    if(!ms.length||ms.some(m=>/ブロック.*位/.test(m.a+m.b)))return;
+    const st={};let all=true;
+    ms.forEach(m=>{[m.a,m.b].forEach(t=>st[t]=st[t]||{w:0,g:0,p:0});
+      const r=cardRes(k,m.id,m.a,m.b);if(!r.done||!r.win){all=false;return;}
+      st[r.win].w++;
+      dbls(k).forEach(x=>{const q=r.c[x];if(!q)return;const g=gw(q);st[m.a].g+=g.a-g.b;st[m.b].g+=g.b-g.a;st[m.a].p+=g.pa-g.pb;st[m.b].p+=g.pb-g.pa;});});
+    if(!all)return;
+    Object.keys(st).sort((x,y)=>st[y].w-st[x].w||st[y].g-st[x].g||st[y].p-st[x].p).forEach((t,i)=>ranks[t]=meta.start+i);
+  });
+  return ranks;
+}
+function podium(k,d){
+  const rk=finalRanks(k,d),by=n=>Object.keys(rk).filter(t=>rk[t]===n);
+  let p=[by(1),by(2),by(3)];
+  if(!p[0].length&&!p[1].length){ // 順位決定戦なし：ブロック1つで全試合終了なら順位表から
+    const ms=(d.matches||[]).filter(m=>!m.isPlayoff),blocks=new Set(ms.map(m=>m.block));
+    if(blocks.size===1&&ms.length&&ms.every(m=>cardRes(k,m.cardId,m.teamAName,m.teamBName).done)){
+      const st=(DB[k].standings||[]).filter(s=>s.division===d.name).sort((x,y)=>(parseInt(x.rank)||99)-(parseInt(y.rank)||99));
+      p=[[st[0]],[st[1]],[st[2]]].map(a=>a.filter(Boolean).map(s=>s.team));
+    }
+  }
+  return p;
+}
+
+// ---------- 表示 ----------
+function render(){
+  const main=document.getElementById('main'),h=location.hash.slice(1);
+  const any=DB.team||DB.indiv;
+  const pl=(DB.team||DB.indiv||{}).payload;
+  document.getElementById('ttl').textContent=(pl&&pl.tournamentName)||'大会結果';
+  document.getElementById('meta').textContent=any?['team','indiv'].filter(k=>DB[k]).map(k=>KIND[k]+' 取り込み：'+DB[k].at).join('　'):'';
+  document.title=document.getElementById('ttl').textContent;
+  if(!any){main.innerHTML='<div class="empty">まだデータがありません。上の「データ取り込み」から取り込んでください。</div>';return;}
+  const m=h.match(/^(team|indiv)-(\d+)$/);
+  if(m&&DB[m[1]]&&DB[m[1]].payload.divisions[+m[2]])detail(m[1],+m[2]);else renderTop();
+  window.scrollTo(0,0);
+}
+function renderTop(){
+  let html='';
+  ['team','indiv'].forEach(k=>{
+    if(!DB[k])return;
+    const rows=DB[k].payload.divisions.map((d,i)=>{
+      const p=podium(k,d),cell=a=>a.length?a.map(esc).join('<br>'):'—';
+      const n=(k==='team'?d.teams:d.pairs||[]).length;
+      return`<tr><td class="l"><a href="#${k}-${i}">${esc(d.name)}</a></td><td>${cell(p[0])}</td><td>${cell(p[1])}</td><td>${cell(p[2])}</td><td>${n}</td></tr>`;
+    }).join('');
+    html+=`<h2>${KIND[k]}</h2><p class="meta">部門名をタップすると対戦結果が表示されます。</p><div class="tbl"><table><tr><th>部門</th><th>優勝</th><th>準優勝</th><th>三位</th><th>${k==='team'?'チーム数':'ペア数'}</th></tr>${rows}</table></div>`;
+  });
+  document.getElementById('main').innerHTML=html;
+}
+function detail(k,di){
+  const d=DB[k].payload.divisions[di],unit=k==='team'?'チーム':'ペア';
+  let html=`<a class="back" href="#">← 一覧へ戻る</a><h2>${KIND[k]}　${esc(d.name)}</h2>`;
+  const p=podium(k,d);
+  if(p.some(a=>a.length))html+=`<p>優勝：${esc(p[0].join('・')||'—')}　準優勝：${esc(p[1].join('・')||'—')}　三位：${esc(p[2].join('・')||'—')}</p>`;
+  const all=d.matches||[],blocks=[...new Set(all.map(m=>m.block))].sort((a,b)=>a==='決定戦'?1:b==='決定戦'?-1:String(a).localeCompare(String(b)));
+  blocks.forEach(b=>{
+    const ms=all.filter(m=>m.block===b);
+    if(b==='決定戦'){html+='<h3>順位決定戦</h3>';}
+    else{
+      html+=`<h3>ブロック${esc(b)}</h3>`;
+      const st=(DB[k].standings||[]).filter(s=>s.division===d.name&&String(s.block)===String(b));
+      if(st.length)html+=`<div class="tbl"><table><tr><th>順位</th><th>${unit}</th><th>勝</th><th>負</th>${k==='team'?'<th>得失試合</th>':''}<th>得失ゲーム</th><th>得失点</th></tr>`+
+        st.map(s=>{const f=n=>(n>0?'+':'')+n;return`<tr><td>${esc(s.rank)}</td><td class="l">${esc(s.team)}</td><td>${s.cardW}</td><td>${s.cardL}</td>${k==='team'?`<td>${f(s.dblW-s.dblL)}</td>`:''}<td>${f(s.gameW-s.gameL)}</td><td>${f((s.pointW||0)-(s.pointL||0))}</td></tr>`;}).join('')+'</table></div><p></p>';
+    }
+    html+=ms.map(m=>matchHTML(k,m)).join('');
+  });
+  document.getElementById('main').innerHTML=html;
+}
+function matchHTML(k,m){
+  const nA=m.teamAName,nB=m.teamBName,r=cardRes(k,m.cardId,nA,nB);
+  const tag=m.isPlayoff?`<span class="tag">${esc(m.playoffName||'順位決定戦')}</span>`:'';
+  const head=`<tr class="hd"><td class="id">${esc(m.cardId)}${tag}</td><td class="r ${r.win===nA?'w':''}">${esc(nA)}</td><td>${r.got?r.a:''}</td><td>${r.got?r.b:''}</td><td class="l ${r.win===nB?'w':''}">${esc(nB)}</td></tr>`;
+  const rows=dbls(k).map(x=>{
+    const q=r.c[x];
+    if(!q)return`<tr><td class="id">${k==='team'?x:''}</td><td class="r"></td><td></td><td></td><td class="l"></td></tr>`;
+    const g=gw(q),both=q.winner==='BOTH';
+    const sc=both?'両チームオープン':[[q.g1a,q.g1b],[q.g2a,q.g2b],[q.g3a,q.g3b]].filter(([a,b])=>num(a)!=null&&num(b)!=null).map(([a,b])=>a+'-'+b).join('　');
+    const aw=q.winner===nA,bw=q.winner===nB;
+    return`<tr><td class="id">${k==='team'?x:''}</td><td class="r ${aw?'w':''}">${esc(q.aPlayers||'')}</td><td colspan="2" class="sc">${esc(sc)}</td><td class="l ${bw?'w':''}">${esc(q.bPlayers||'')}</td></tr>`;
+  }).join('');
+  return`<div class="mt"><table>${head}${rows}</table></div>`;
+}
+window.addEventListener('hashchange',render);
+initData();
+</script>
+</body>
+</html>
